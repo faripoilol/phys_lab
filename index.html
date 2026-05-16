@@ -117,9 +117,9 @@
               <p class="panel-label">Choose The Right Mode</p>
               <h3>Choose Rope Or Spring Motion</h3>
               <ul class="detail-list">
-                <li>`Mass Independence`: hold `length` fixed, vary `mass`</li>
-                <li>`Length Law`: hold `mass` fixed, vary `length`</li>
-                <li>`Spring Pendulum`: keep the spring fixed, vary `mass`, and measure vertical motion</li>
+                <li><code>Mass Independence</code>: hold <code>length</code> fixed, vary <code>mass</code></li>
+                <li><code>Length Law</code>: hold <code>mass</code> fixed, vary <code>length</code></li>
+                <li><code>Spring Pendulum</code>: keep the spring fixed, vary <code>mass</code>, and measure vertical motion</li>
                 <li>App warns when the controlled setup parameter drifts across runs</li>
               </ul>
             </article>
@@ -506,87 +506,503 @@
         <section id="manual" class="content-section">
           <div class="section-heading">
             <p class="eyebrow">Lab Manual</p>
-            <h2>Use the manual and the instrument together</h2>
+            <h2>Experiment manual with theory, setup, and expected results</h2>
             <p>
-              Keep the theory limits, setup rules, procedure, and interpretation close to the live
-              controls so a new user can run the experiment without guessing the next step.
+              Six classroom investigations connect the live measurement tool to the oscillator
+              models. Current app modes are marked as live; planned spring extensions are
+              documented first so the theory is ready before the controls expand.
             </p>
           </div>
 
-          <div class="manual-grid">
-            <article class="panel manual-block">
-              <p class="panel-label">Theory</p>
-              <h3>Supported Oscillator Models</h3>
-              <p>
-                Rope pendulum runs use the small-angle pendulum model, while spring pendulum runs
-                use the small vertical oscillation model for a hanging mass on a spring.
-              </p>
-              <div class="formula-card">
-                <p><span class="formula-name">Period</span><code>T = 2π √(l / g)</code></p>
-                <p><span class="formula-name">Frequency</span><code>f = 1 / T</code></p>
-                <p><span class="formula-name">Spring Frequency</span><code>f = (1 / 2π) √(k / m)</code></p>
+          <nav class="manual-nav" aria-label="Experiment manual sections">
+            <a href="#rope-mass">Rope Mass</a>
+            <a href="#rope-length">Rope Length</a>
+            <a href="#spring-mass">Spring Mass</a>
+            <a href="#spring-k">Measure k</a>
+            <a href="#spring-parallel">Parallel</a>
+            <a href="#spring-series">Series</a>
+          </nav>
+
+          <div class="manual-overview">
+            <article class="panel manual-summary">
+              <p class="panel-label">Shared Setup</p>
+              <h3>Camera, marker, and motion limits</h3>
+              <ul class="detail-list">
+                <li>Use one red marker on the bob, hanger, or moving mass.</li>
+                <li>Place the camera perpendicular to the motion plane.</li>
+                <li>Keep pendulum angles small and spring stretches moderate.</li>
+                <li>Capture several oscillations, then keep only reviewed runs.</li>
+              </ul>
+            </article>
+
+            <article class="panel manual-summary">
+              <p class="panel-label">Core Models</p>
+              <h3>Two oscillator laws</h3>
+              <div class="formula-stack">
+                <div class="math-display" aria-label="Pendulum frequency equals one over two pi times square root of g over length">
+                  <span class="math-symbol">f</span>
+                  <span>=</span>
+                  <span class="math-frac">
+                    <span>1</span>
+                    <span>2&pi;</span>
+                  </span>
+                  <span>&radic;</span>
+                  <span class="math-radicand">g / l</span>
+                </div>
+                <div class="math-display" aria-label="Spring frequency equals one over two pi times square root of k over mass">
+                  <span class="math-symbol">f</span>
+                  <span>=</span>
+                  <span class="math-frac">
+                    <span>1</span>
+                    <span>2&pi;</span>
+                  </span>
+                  <span>&radic;</span>
+                  <span class="math-radicand">k / m</span>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <div class="experiment-manual">
+            <article class="experiment-panel" id="rope-mass">
+              <div class="experiment-copy">
+                <p class="panel-label">Current App Mode</p>
+                <h3>Rope Pendulum: Mass Independence</h3>
+                <p>
+                  Keep the pendulum length fixed, change bob mass, and test whether measured
+                  frequency stays approximately constant.
+                </p>
+
+                <div class="formula-stack">
+                  <div class="math-display">
+                    <span>&omega;</span>
+                    <span>=</span>
+                    <span>&radic;</span>
+                    <span class="math-radicand">g / l</span>
+                  </div>
+                  <div class="math-display">
+                    <span class="math-symbol">f</span>
+                    <span>is independent of</span>
+                    <span class="math-symbol">m</span>
+                  </div>
+                </div>
+
+                <dl class="variable-list">
+                  <div><dt>Controlled</dt><dd>Length <code>l</code></dd></div>
+                  <div><dt>Varied</dt><dd>Mass <code>m</code></dd></div>
+                  <div><dt>Expected</dt><dd>Flat frequency versus mass</dd></div>
+                </dl>
+
+                <ol class="procedure-list">
+                  <li>Measure length from pivot to bob center.</li>
+                  <li>Record runs with several bob masses.</li>
+                  <li>Reject runs with marker loss or changed length.</li>
+                  <li>Compare saved final frequencies.</li>
+                </ol>
+
+                <div class="manual-table-wrap">
+                  <table class="manual-table">
+                    <thead>
+                      <tr><th>Mass (g)</th><th>Length (m)</th><th>Frequency (Hz)</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>50</td><td>0.750</td><td></td></tr>
+                      <tr><td>100</td><td>0.750</td><td></td></tr>
+                      <tr><td>150</td><td>0.750</td><td></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="experiment-visuals">
+                <figure class="manual-figure manual-animation" data-animation-panel>
+                  <button class="animation-toggle" type="button" data-animation-toggle aria-pressed="false">Pause</button>
+                  <svg viewBox="0 0 320 220" role="img" aria-label="Rope pendulum setup with red marker">
+                    <rect class="diagram-wall" x="36" y="22" width="248" height="10" rx="5" />
+                    <g class="pendulum-swing">
+                      <line class="diagram-line" x1="160" y1="32" x2="205" y2="150" />
+                      <circle class="diagram-bob" cx="205" cy="150" r="24" />
+                      <circle class="diagram-marker" cx="214" cy="142" r="7" />
+                    </g>
+                    <line class="diagram-axis" x1="88" y1="166" x2="252" y2="166" />
+                    <path class="diagram-arc" d="M112 152 Q160 190 208 152" />
+                    <text x="172" y="96">l fixed</text>
+                    <text x="108" y="188">track x</text>
+                  </svg>
+                  <figcaption>Keep length fixed while changing the bob mass.</figcaption>
+                </figure>
+                <figure class="manual-figure graph-figure">
+                  <svg viewBox="0 0 320 180" role="img" aria-label="Expected flat graph of frequency versus mass">
+                    <line class="graph-axis" x1="46" y1="138" x2="286" y2="138" />
+                    <line class="graph-axis" x1="46" y1="138" x2="46" y2="28" />
+                    <polyline class="graph-line graph-flat" points="58,78 110,77 162,80 214,76 270,79" />
+                    <text x="122" y="166">mass</text>
+                    <text x="8" y="24">f</text>
+                  </svg>
+                  <figcaption>Expected trend: frequency stays nearly flat.</figcaption>
+                </figure>
               </div>
             </article>
 
-            <article class="panel manual-block">
-              <p class="panel-label">Setup</p>
-              <h3>Required Classroom Conditions</h3>
-              <ul class="detail-list">
-                <li>Attach the required red marker to the bob</li>
-                <li>Place the camera perpendicular to the motion plane</li>
-                <li>Keep the background quiet and lighting even</li>
-                <li>Frame rope motion mainly left-to-right and spring motion mainly up-and-down</li>
-                <li>Use small release angles for the rope pendulum and small vertical stretches for the spring</li>
-              </ul>
+            <article class="experiment-panel" id="rope-length">
+              <div class="experiment-copy">
+                <p class="panel-label">Current App Mode</p>
+                <h3>Rope Pendulum: Length Law</h3>
+                <p>
+                  Keep mass fixed, vary pendulum length, and show that longer pendulums oscillate
+                  more slowly.
+                </p>
+
+                <div class="formula-stack">
+                  <div class="math-display">
+                    <span class="math-symbol">f</span>
+                    <span>=</span>
+                    <span class="math-frac"><span>1</span><span>2&pi;</span></span>
+                    <span>&radic;</span>
+                    <span class="math-radicand">g / l</span>
+                  </div>
+                  <div class="math-display">
+                    <span class="math-symbol">f</span>
+                    <span>&prop;</span>
+                    <span class="math-frac"><span>1</span><span>&radic;l</span></span>
+                  </div>
+                </div>
+
+                <dl class="variable-list">
+                  <div><dt>Controlled</dt><dd>Mass <code>m</code></dd></div>
+                  <div><dt>Varied</dt><dd>Length <code>l</code></dd></div>
+                  <div><dt>Expected</dt><dd>Frequency decreases with length</dd></div>
+                </dl>
+
+                <ol class="procedure-list">
+                  <li>Use one bob for all runs.</li>
+                  <li>Measure length from pivot to bob center.</li>
+                  <li>Capture runs at several lengths.</li>
+                  <li>Compare <code>f</code> against <code>1 / sqrt(l)</code>.</li>
+                </ol>
+
+                <div class="manual-table-wrap">
+                  <table class="manual-table">
+                    <thead>
+                      <tr><th>Length (m)</th><th>1/sqrt(l)</th><th>Frequency (Hz)</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>0.400</td><td></td><td></td></tr>
+                      <tr><td>0.600</td><td></td><td></td></tr>
+                      <tr><td>0.800</td><td></td><td></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="experiment-visuals">
+                <figure class="manual-figure">
+                  <svg viewBox="0 0 320 220" role="img" aria-label="Two pendulum lengths compared">
+                    <rect class="diagram-wall" x="36" y="22" width="248" height="10" rx="5" />
+                    <line class="diagram-line muted-line" x1="118" y1="32" x2="118" y2="118" />
+                    <line class="diagram-line" x1="210" y1="32" x2="210" y2="168" />
+                    <circle class="diagram-bob small-bob" cx="118" cy="118" r="19" />
+                    <circle class="diagram-bob" cx="210" cy="168" r="23" />
+                    <circle class="diagram-marker" cx="124" cy="112" r="6" />
+                    <circle class="diagram-marker" cx="218" cy="161" r="7" />
+                    <text x="82" y="78">short</text>
+                    <text x="222" y="104">long</text>
+                  </svg>
+                  <figcaption>Only length changes; mass stays fixed.</figcaption>
+                </figure>
+                <figure class="manual-figure graph-figure">
+                  <svg viewBox="0 0 320 180" role="img" aria-label="Expected decreasing graph of frequency versus length">
+                    <line class="graph-axis" x1="46" y1="138" x2="286" y2="138" />
+                    <line class="graph-axis" x1="46" y1="138" x2="46" y2="28" />
+                    <path class="graph-line" d="M58 48 C110 70, 150 92, 270 126" />
+                    <text x="118" y="166">length</text>
+                    <text x="8" y="24">f</text>
+                  </svg>
+                  <figcaption>Expected trend: longer length lowers frequency.</figcaption>
+                </figure>
+              </div>
             </article>
 
-            <article class="panel manual-block">
-              <p class="panel-label">Procedure</p>
-              <h3>Mode-Specific Workflow</h3>
-              <ul class="detail-list">
-                <li>`Mass Independence`: keep length fixed, vary mass, compare measured frequencies</li>
-                <li>`Length Law`: keep mass fixed, vary length, compare how frequency changes</li>
-                <li>`Spring Pendulum`: keep spring constant fixed, vary mass, and compare vertical oscillation frequency</li>
-                <li>Review each run before saving it into the current experiment session</li>
-              </ul>
+            <article class="experiment-panel" id="spring-mass">
+              <div class="experiment-copy">
+                <p class="panel-label">Current App Mode</p>
+                <h3>Spring Pendulum: Mass Dependence</h3>
+                <p>
+                  Use the same spring, change attached mass, and measure how vertical oscillation
+                  frequency changes.
+                </p>
+
+                <div class="formula-stack">
+                  <div class="math-display">
+                    <span>&omega;</span>
+                    <span>=</span>
+                    <span>&radic;</span>
+                    <span class="math-radicand">k / m</span>
+                  </div>
+                  <div class="math-display">
+                    <span class="math-symbol">f</span>
+                    <span>&prop;</span>
+                    <span class="math-frac"><span>1</span><span>&radic;m</span></span>
+                  </div>
+                </div>
+
+                <dl class="variable-list">
+                  <div><dt>Controlled</dt><dd>Spring constant <code>k</code></dd></div>
+                  <div><dt>Varied</dt><dd>Mass <code>m</code></dd></div>
+                  <div><dt>Expected</dt><dd>Heavier masses oscillate slower</dd></div>
+                </dl>
+
+                <ol class="procedure-list">
+                  <li>Use one spring for all runs.</li>
+                  <li>Keep motion vertical and avoid sideways swing.</li>
+                  <li>Capture runs with several masses.</li>
+                  <li>Convert grams to kilograms for theory checks.</li>
+                </ol>
+
+                <div class="manual-table-wrap">
+                  <table class="manual-table">
+                    <thead>
+                      <tr><th>Mass (g)</th><th>k (N/m)</th><th>Frequency (Hz)</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>50</td><td>5.0</td><td></td></tr>
+                      <tr><td>100</td><td>5.0</td><td></td></tr>
+                      <tr><td>150</td><td>5.0</td><td></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="experiment-visuals">
+                <figure class="manual-figure manual-animation" data-animation-panel>
+                  <button class="animation-toggle" type="button" data-animation-toggle aria-pressed="false">Pause</button>
+                  <svg viewBox="0 0 320 220" role="img" aria-label="Animated vertical spring pendulum">
+                    <rect class="diagram-wall" x="84" y="22" width="152" height="10" rx="5" />
+                    <g class="spring-motion">
+                      <path class="spring-line" d="M160 32 L146 46 L174 60 L146 74 L174 88 L146 102 L174 116 L160 130" />
+                      <rect class="spring-mass" x="130" y="130" width="60" height="42" rx="10" />
+                      <circle class="diagram-marker" cx="174" cy="142" r="7" />
+                    </g>
+                    <line class="diagram-axis" x1="238" y1="52" x2="238" y2="178" />
+                    <text x="248" y="120">track y</text>
+                  </svg>
+                  <figcaption>The marker should move mostly up and down.</figcaption>
+                </figure>
+                <figure class="manual-figure graph-figure">
+                  <svg viewBox="0 0 320 180" role="img" aria-label="Expected decreasing graph of frequency versus mass">
+                    <line class="graph-axis" x1="46" y1="138" x2="286" y2="138" />
+                    <line class="graph-axis" x1="46" y1="138" x2="46" y2="28" />
+                    <path class="graph-line" d="M58 48 C120 78, 178 104, 270 128" />
+                    <text x="122" y="166">mass</text>
+                    <text x="8" y="24">f</text>
+                  </svg>
+                  <figcaption>Expected trend: heavier mass lowers frequency.</figcaption>
+                </figure>
+              </div>
             </article>
 
-            <article class="panel manual-block">
-              <p class="panel-label">Troubleshooting</p>
-              <h3>Failure Modes To Expect</h3>
-              <ul class="detail-list">
-                <li>Marker blends into the background or reflections break color detection</li>
-                <li>Camera angle introduces apparent motion outside the chosen measurement axis</li>
-                <li>Large release angles drift away from the simple model used in the manual</li>
-              </ul>
+            <article class="experiment-panel is-planned" id="spring-k">
+              <div class="experiment-copy">
+                <p class="panel-label">Documentation First</p>
+                <h3>Measuring Spring Constant</h3>
+                <p>
+                  Estimate spring stiffness from static extension before using <code>k</code> in dynamic
+                  oscillation predictions.
+                </p>
+
+                <div class="formula-stack">
+                  <div class="math-display"><span>F</span><span>=</span><span>mg</span></div>
+                  <div class="math-display"><span>F</span><span>=</span><span>kx</span></div>
+                  <div class="math-display"><span>k</span><span>=</span><span class="math-frac"><span>mg</span><span>x</span></span></div>
+                </div>
+
+                <dl class="variable-list">
+                  <div><dt>Controlled</dt><dd>Spring</dd></div>
+                  <div><dt>Varied</dt><dd>Hanging mass</dd></div>
+                  <div><dt>Expected</dt><dd>Force is linear with extension</dd></div>
+                </dl>
+
+                <ol class="procedure-list">
+                  <li>Measure the unloaded spring length.</li>
+                  <li>Hang known masses one at a time.</li>
+                  <li>Record extension after motion stops.</li>
+                  <li>Estimate <code>k</code> from the slope of force versus extension.</li>
+                </ol>
+
+                <div class="manual-table-wrap">
+                  <table class="manual-table">
+                    <thead>
+                      <tr><th>Mass (kg)</th><th>Force (N)</th><th>Extension (m)</th><th>k (N/m)</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>0.050</td><td></td><td></td><td></td></tr>
+                      <tr><td>0.100</td><td></td><td></td><td></td></tr>
+                      <tr><td>0.150</td><td></td><td></td><td></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="experiment-visuals">
+                <figure class="manual-figure">
+                  <svg viewBox="0 0 320 220" role="img" aria-label="Static spring extension measurement">
+                    <rect class="diagram-wall" x="78" y="22" width="164" height="10" rx="5" />
+                    <path class="spring-line" d="M150 32 L136 48 L164 64 L136 80 L164 96 L136 112 L164 128 L150 144" />
+                    <rect class="spring-mass" x="120" y="144" width="60" height="42" rx="10" />
+                    <line class="ruler-line" x1="226" y1="34" x2="226" y2="186" />
+                    <line class="diagram-axis" x1="204" y1="144" x2="204" y2="186" />
+                    <text x="214" y="168">x</text>
+                    <text x="236" y="96">ruler</text>
+                  </svg>
+                  <figcaption>Measure extension from the unloaded length.</figcaption>
+                </figure>
+                <figure class="manual-figure graph-figure">
+                  <svg viewBox="0 0 320 180" role="img" aria-label="Expected linear graph of force versus extension">
+                    <line class="graph-axis" x1="46" y1="138" x2="286" y2="138" />
+                    <line class="graph-axis" x1="46" y1="138" x2="46" y2="28" />
+                    <line class="graph-line" x1="58" y1="126" x2="266" y2="42" />
+                    <text x="108" y="166">extension</text>
+                    <text x="8" y="24">F</text>
+                  </svg>
+                  <figcaption>Expected trend: slope gives <code>k</code>.</figcaption>
+                </figure>
+              </div>
             </article>
 
-            <article class="panel manual-block manual-block-wide">
-              <p class="panel-label">Results</p>
-              <h3>How to read the saved session</h3>
-              <div class="processing-grid">
-                <div class="processing-card">
-                  <h4>Mass Independence Mode</h4>
-                  <p>
-                    Compare multiple runs taken at different masses while length remains controlled.
-                    The app warns if the session drifts away from that condition.
-                  </p>
+            <article class="experiment-panel is-planned" id="spring-parallel">
+              <div class="experiment-copy">
+                <p class="panel-label">Documentation First</p>
+                <h3>Springs In Parallel</h3>
+                <p>
+                  Mount two springs side by side so their forces add at the same extension.
+                </p>
+
+                <div class="formula-stack">
+                  <div class="math-display">
+                    <span>k<sup>*</sup></span>
+                    <span>=</span>
+                    <span>k<sub>1</sub> + k<sub>2</sub></span>
+                  </div>
                 </div>
-                <div class="processing-card">
-                  <h4>Length Law Mode</h4>
-                  <p>
-                    Compare multiple runs at different lengths while mass remains fixed. Students
-                    then interpret the trend using the manual rather than an automatic app verdict.
-                  </p>
+
+                <dl class="variable-list">
+                  <div><dt>Controlled</dt><dd>Mass</dd></div>
+                  <div><dt>Varied</dt><dd>Spring arrangement</dd></div>
+                  <div><dt>Expected</dt><dd>Combined spring is stiffer</dd></div>
+                </dl>
+
+                <ol class="procedure-list">
+                  <li>Measure or identify <code>k1</code> and <code>k2</code>.</li>
+                  <li>Mount both springs to one hanger.</li>
+                  <li>Keep the hanger level.</li>
+                  <li>Compare measured stiffness with <code>k1 + k2</code>.</li>
+                </ol>
+
+                <div class="manual-table-wrap">
+                  <table class="manual-table">
+                    <thead>
+                      <tr><th>k1</th><th>k2</th><th>Predicted k*</th><th>Measured k*</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td></td><td></td><td></td><td></td></tr>
+                    </tbody>
+                  </table>
                 </div>
-                <div class="processing-card">
-                  <h4>Spring Pendulum Mode</h4>
-                  <p>
-                    Compare vertical oscillation runs taken with different masses on the same
-                    spring. The app warns if the saved session drifts to a different spring
-                    constant.
-                  </p>
+              </div>
+
+              <div class="experiment-visuals">
+                <figure class="manual-figure">
+                  <svg viewBox="0 0 320 220" role="img" aria-label="Two springs in parallel">
+                    <rect class="diagram-wall" x="70" y="22" width="180" height="10" rx="5" />
+                    <path class="spring-line" d="M126 32 L114 48 L138 64 L114 80 L138 96 L114 112 L138 128 L126 144" />
+                    <path class="spring-line" d="M194 32 L182 48 L206 64 L182 80 L206 96 L182 112 L206 128 L194 144" />
+                    <rect class="hanger-bar" x="100" y="144" width="120" height="10" rx="5" />
+                    <rect class="spring-mass" x="130" y="154" width="60" height="40" rx="10" />
+                    <circle class="diagram-marker" cx="178" cy="166" r="7" />
+                  </svg>
+                  <figcaption>Parallel springs share extension and add forces.</figcaption>
+                </figure>
+                <figure class="manual-figure graph-figure">
+                  <svg viewBox="0 0 320 180" role="img" aria-label="Expected higher stiffness for parallel springs">
+                    <line class="graph-axis" x1="46" y1="138" x2="286" y2="138" />
+                    <line class="graph-axis" x1="46" y1="138" x2="46" y2="28" />
+                    <line class="graph-line muted-graph" x1="64" y1="124" x2="250" y2="72" />
+                    <line class="graph-line" x1="64" y1="124" x2="250" y2="40" />
+                    <text x="102" y="166">extension</text>
+                    <text x="8" y="24">F</text>
+                  </svg>
+                  <figcaption>Expected trend: steeper force-extension line.</figcaption>
+                </figure>
+              </div>
+            </article>
+
+            <article class="experiment-panel is-planned" id="spring-series">
+              <div class="experiment-copy">
+                <p class="panel-label">Documentation First</p>
+                <h3>Springs In Series</h3>
+                <p>
+                  Connect two springs end to end so the same force stretches both and extensions
+                  add.
+                </p>
+
+                <div class="formula-stack">
+                  <div class="math-display">
+                    <span class="math-frac"><span>1</span><span>k<sup>*</sup></span></span>
+                    <span>=</span>
+                    <span class="math-frac"><span>1</span><span>k<sub>1</sub></span></span>
+                    <span>+</span>
+                    <span class="math-frac"><span>1</span><span>k<sub>2</sub></span></span>
+                  </div>
                 </div>
+
+                <dl class="variable-list">
+                  <div><dt>Controlled</dt><dd>Mass</dd></div>
+                  <div><dt>Varied</dt><dd>Spring arrangement</dd></div>
+                  <div><dt>Expected</dt><dd>Combined spring is softer</dd></div>
+                </dl>
+
+                <ol class="procedure-list">
+                  <li>Measure or identify <code>k1</code> and <code>k2</code>.</li>
+                  <li>Connect the springs end to end.</li>
+                  <li>Attach the mass to the lower spring.</li>
+                  <li>Compare measured stiffness with the series prediction.</li>
+                </ol>
+
+                <div class="manual-table-wrap">
+                  <table class="manual-table">
+                    <thead>
+                      <tr><th>k1</th><th>k2</th><th>Predicted k*</th><th>Measured k*</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td></td><td></td><td></td><td></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="experiment-visuals">
+                <figure class="manual-figure">
+                  <svg viewBox="0 0 320 220" role="img" aria-label="Two springs in series">
+                    <rect class="diagram-wall" x="92" y="22" width="136" height="10" rx="5" />
+                    <path class="spring-line" d="M160 32 L146 45 L174 58 L146 71 L174 84 L160 97" />
+                    <rect class="connector-block" x="146" y="97" width="28" height="10" rx="5" />
+                    <path class="spring-line" d="M160 107 L146 120 L174 133 L146 146 L174 159 L160 172" />
+                    <rect class="spring-mass" x="130" y="172" width="60" height="38" rx="10" />
+                    <circle class="diagram-marker" cx="176" cy="184" r="7" />
+                  </svg>
+                  <figcaption>Series springs share force and add extensions.</figcaption>
+                </figure>
+                <figure class="manual-figure graph-figure">
+                  <svg viewBox="0 0 320 180" role="img" aria-label="Expected lower stiffness for series springs">
+                    <line class="graph-axis" x1="46" y1="138" x2="286" y2="138" />
+                    <line class="graph-axis" x1="46" y1="138" x2="46" y2="28" />
+                    <line class="graph-line muted-graph" x1="64" y1="124" x2="250" y2="54" />
+                    <line class="graph-line" x1="64" y1="124" x2="250" y2="100" />
+                    <text x="102" y="166">extension</text>
+                    <text x="8" y="24">F</text>
+                  </svg>
+                  <figcaption>Expected trend: shallower force-extension line.</figcaption>
+                </figure>
               </div>
             </article>
           </div>
@@ -616,7 +1032,7 @@
               <p class="panel-label">Step 2</p>
               <h3>Choose A Mode And Enter Values</h3>
               <p>
-                Select `Mass Independence`, `Length Law`, or `Spring Pendulum`, then enter the
+                Select <code>Mass Independence</code>, <code>Length Law</code>, or <code>Spring Pendulum</code>, then enter the
                 current mass and the required setup parameter before you start the run.
               </p>
             </article>

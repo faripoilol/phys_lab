@@ -2018,6 +2018,19 @@ function init() {
 
   refreshUI(elements, state, runtime);
 
+  document.querySelectorAll("[data-animation-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const panel = button.closest("[data-animation-panel]");
+      if (!panel) {
+        return;
+      }
+
+      const paused = panel.classList.toggle("is-paused");
+      button.textContent = paused ? "Play" : "Pause";
+      button.setAttribute("aria-pressed", String(paused));
+    });
+  });
+
   const fieldBindings = [
     ["massInput", "mass"],
     ["lengthInput", "length"],
