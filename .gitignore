@@ -1,11 +1,12 @@
 out/
+docs/
 .venv/
 venv/
 __pycache__/
+.pytest_cache/
 *.pyc
 .ipynb_checkpoints/
 .DS_Store
 *.png
 *.csv
 !/pl.png
-!/docs/pl.png
