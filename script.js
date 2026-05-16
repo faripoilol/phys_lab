@@ -2026,10 +2026,38 @@ function init() {
       }
 
       const paused = panel.classList.toggle("is-paused");
+      panel.querySelectorAll("svg").forEach((svg) => {
+        if (typeof svg.pauseAnimations !== "function" || typeof svg.unpauseAnimations !== "function") {
+          return;
+        }
+
+        if (paused) {
+          svg.pauseAnimations();
+        } else {
+          svg.unpauseAnimations();
+        }
+      });
       button.textContent = paused ? "Play" : "Pause";
       button.setAttribute("aria-pressed", String(paused));
     });
   });
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    document.querySelectorAll("[data-animation-panel]").forEach((panel) => {
+      panel.classList.add("is-paused");
+      panel.querySelectorAll("svg").forEach((svg) => {
+        if (typeof svg.pauseAnimations === "function") {
+          svg.pauseAnimations();
+        }
+      });
+
+      const button = panel.querySelector("[data-animation-toggle]");
+      if (button) {
+        button.textContent = "Play";
+        button.setAttribute("aria-pressed", "true");
+      }
+    });
+  }
 
   const fieldBindings = [
     ["massInput", "mass"],

@@ -1175,41 +1175,10 @@ td {
   cursor: pointer;
 }
 
-.spring-motion {
-  animation: spring-bounce 1.55s ease-in-out infinite;
-}
-
-.pendulum-swing {
-  animation: pendulum-swing 1.8s ease-in-out infinite;
-  transform-box: fill-box;
-  transform-origin: 160px 32px;
-}
-
-.manual-animation.is-paused .spring-motion,
-.manual-animation.is-paused .pendulum-swing {
-  animation-play-state: paused;
-}
-
-@keyframes spring-bounce {
-  0%,
-  100% {
-    transform: translateY(-8px);
-  }
-
-  50% {
-    transform: translateY(14px);
-  }
-}
-
-@keyframes pendulum-swing {
-  0%,
-  100% {
-    transform: rotate(-7deg);
-  }
-
-  50% {
-    transform: rotate(7deg);
-  }
+.diagram-pivot {
+  fill: var(--signal);
+  stroke: var(--forest);
+  stroke-width: 3;
 }
 
 code {
@@ -1362,8 +1331,10 @@ code {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spring-motion,
-  .pendulum-swing {
+  .pendulum-bob-track,
+  .spring-mass-track,
+  .pendulum-string,
+  .spring-length {
     animation: none;
   }
 }
