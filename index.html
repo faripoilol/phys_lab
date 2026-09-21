@@ -618,25 +618,26 @@
                 <figure class="manual-figure manual-animation" data-animation-panel>
                   <button class="animation-toggle" type="button" data-animation-toggle aria-pressed="false">Pause</button>
                   <svg viewBox="0 0 320 220" role="img" aria-label="Rope pendulum setup with red marker">
-                    <rect class="diagram-wall" x="36" y="22" width="248" height="10" rx="5" />
-                    <circle class="diagram-pivot" cx="160" cy="32" r="7" />
-                    <line class="diagram-line pendulum-string" x1="160" y1="32" x2="205" y2="150">
-                      <animate attributeName="x2" values="190;220;190" dur="1.8s" repeatCount="indefinite" />
-                    </line>
-                    <g class="pendulum-bob-track">
-                      <circle class="diagram-bob" cx="205" cy="150" r="24" />
-                      <circle class="diagram-marker" cx="214" cy="142" r="7" />
+                    <rect class="diagram-wall" x="84" y="22" width="152" height="10" rx="5" />
+                    <g class="pendulum-swing" transform="rotate(-12 160 32)">
+                      <line class="diagram-line pendulum-string" x1="160" y1="32" x2="160" y2="150" />
+                      <circle class="diagram-bob" cx="160" cy="150" r="24" />
+                      <circle class="diagram-marker" cx="169" cy="142" r="7" />
                       <animateTransform
                         attributeName="transform"
-                        type="translate"
-                        values="-15 0;15 0;-15 0"
+                        type="rotate"
+                        values="-12 160 32;12 160 32;-12 160 32"
+                        keyTimes="0;0.5;1"
+                        calcMode="spline"
+                        keySplines="0.3642 0 0.6358 1;0.3642 0 0.6358 1"
                         dur="1.8s"
                         repeatCount="indefinite"
                       />
                     </g>
+                    <circle class="diagram-pivot" cx="160" cy="32" r="7" />
                     <line class="diagram-axis" x1="88" y1="166" x2="252" y2="166" />
                     <path class="diagram-arc" d="M112 152 Q160 190 208 152" />
-                    <text x="172" y="96">l fixed</text>
+                    <text x="186" y="96">l fixed</text>
                     <text x="108" y="188">track x</text>
                   </svg>
                   <figcaption>Keep length fixed while changing the bob mass.</figcaption>
@@ -788,22 +789,28 @@
                   <button class="animation-toggle" type="button" data-animation-toggle aria-pressed="false">Pause</button>
                   <svg viewBox="0 0 320 220" role="img" aria-label="Animated vertical spring pendulum">
                     <rect class="diagram-wall" x="84" y="22" width="152" height="10" rx="5" />
-                    <circle class="diagram-pivot" cx="160" cy="32" r="7" />
-                    <path class="spring-line spring-length" d="M160 32 L146 46 L174 60 L146 74 L174 88 L146 102 L174 116 L160 134">
+                    <path class="spring-line spring-length" d="M160 32 L146 40.5 L174 57.5 L146 74.5 L174 91.5 L146 108.5 L174 125.5 L160 134">
                       <animate
                         attributeName="d"
-                        values="M160 32 L146 43 L174 54 L146 65 L174 76 L146 87 L174 98 L160 118;M160 32 L146 51 L174 70 L146 89 L174 108 L146 127 L174 146 L160 150;M160 32 L146 43 L174 54 L146 65 L174 76 L146 87 L174 98 L160 118"
+                        values="M160 32 L146 39 L174 53 L146 67 L174 81 L146 95 L174 109 L160 116;M160 32 L146 42 L174 62 L146 82 L174 102 L146 122 L174 142 L160 152;M160 32 L146 39 L174 53 L146 67 L174 81 L146 95 L174 109 L160 116"
+                        keyTimes="0;0.5;1"
+                        calcMode="spline"
+                        keySplines="0.3642 0 0.6358 1;0.3642 0 0.6358 1"
                         dur="1.55s"
                         repeatCount="indefinite"
                       />
                     </path>
+                    <circle class="diagram-pivot" cx="160" cy="32" r="7" />
                     <g class="spring-mass-track">
                       <rect class="spring-mass" x="130" y="134" width="60" height="42" rx="10" />
                       <circle class="diagram-marker" cx="174" cy="146" r="7" />
                       <animateTransform
                         attributeName="transform"
                         type="translate"
-                        values="0 -12;0 20;0 -12"
+                        values="0 -18;0 18;0 -18"
+                        keyTimes="0;0.5;1"
+                        calcMode="spline"
+                        keySplines="0.3642 0 0.6358 1;0.3642 0 0.6358 1"
                         dur="1.55s"
                         repeatCount="indefinite"
                       />
