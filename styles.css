@@ -1329,12 +1329,3 @@ code {
     padding: 1rem;
   }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .pendulum-bob-track,
-  .spring-mass-track,
-  .pendulum-string,
-  .spring-length {
-    animation: none;
-  }
-}
