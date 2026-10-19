@@ -36,6 +36,8 @@ done; this file replaces the earlier documentation expansion plan.
   every pull-request branch (including the previously merged PR #2), so the
   dashboard build settings, not the repository, hold the real configuration.
   Document those settings, fix or disable the branch preview builds, and close
-  or finish the open Workers configuration pull request.
+  or finish the open Workers configuration pull request. Known trap: adding a
+  `package.json` at the repository root made the production build fail
+  (2026-10-19); removing it restored deployment.
 - Decide whether `notebooks/prony.ipynb` (untracked exploration of Prony's
   method) should be committed with outputs stripped or removed.

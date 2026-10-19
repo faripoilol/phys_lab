@@ -17,4 +17,6 @@ node --test tests/estimator.test.js
 ```
 
 - Do not commit `docs/` or `out/`; both are generated.
+- Do not add a `package.json` at the repository root: the Cloudflare Workers
+  production build fails when one is present. Run the Node tests directly.
 - Do not modify `LICENSE` unless explicitly requested.
