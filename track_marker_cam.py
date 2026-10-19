@@ -5,8 +5,9 @@ import argparse
 import math
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import cv2
 import matplotlib.pyplot as plt
@@ -14,7 +15,22 @@ import numpy as np
 import pandas as pd
 
 
-def parse_args() -> argparse.Namespace:
+@dataclass
+class CaptureResult:
+    """Samples collected by capture_run plus the first processed frame for debugging."""
+
+    t_s: np.ndarray
+    cx: np.ndarray
+    cy: np.ndarray
+    debug_preview: Optional[np.ndarray]
+    debug_mask: Optional[np.ndarray]
+
+
+class CaptureError(RuntimeError):
+    """Raised by capture_run when the camera or the MP4 writer fails."""
+
+
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Track a colored marker from live camera input and save CSV + plot.",
     )
@@ -46,7 +62,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-preview", action="store_true", help="Disable live preview windows")
     parser.add_argument("--no-mp4", action="store_true", help="Disable saving raw_preview.mp4")
     parser.add_argument("--show-plot", action="store_true", help="Show plot window after saving plot")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def parse_hsv_bound(text: str) -> np.ndarray:
@@ -218,30 +234,24 @@ def save_outputs(
     cv2.imwrite(str(out_dir / "debug_first_frame.png"), combined)
 
 
-def main() -> int:
-    args = parse_args()
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
+def capture_run(
+    cap,
+    args: argparse.Namespace,
+    out_dir: Path,
+    *,
+    hsv_lower: np.ndarray,
+    hsv_upper: np.ndarray,
+    hsv_lower2: Optional[np.ndarray],
+    hsv_upper2: Optional[np.ndarray],
+) -> CaptureResult:
+    """Read frames from ``cap`` until the stop condition and return the tracked samples.
 
-    try:
-        hsv_lower = parse_hsv_bound(args.hsv_lower)
-        hsv_upper = parse_hsv_bound(args.hsv_upper)
-        hsv_lower2 = parse_hsv_bound(args.hsv_lower2) if args.hsv_lower2 else None
-        hsv_upper2 = parse_hsv_bound(args.hsv_upper2) if args.hsv_upper2 else None
-    except ValueError as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 2
-
-    cap = open_camera(args.camera_index, args.device, args.width, args.height)
-    if not cap.isOpened():
-        source = args.device if args.device else f"index={args.camera_index}"
-        print(
-            f"ERROR: Could not open camera source ({source}). "
-            "On Linux, verify /dev/video* and user membership in the video group.",
-            file=sys.stderr,
-        )
-        return 1
-
+    Capture stops on ``--duration``, on ``q`` in the preview window, or on Ctrl-C
+    (KeyboardInterrupt), in which case the samples collected so far are returned so
+    the caller can still save them. ``cap`` only needs ``read``, ``get`` and
+    ``release``, so a fake capture object can be injected in tests.
+    Raises CaptureError when a frame cannot be read or the MP4 writer cannot be opened.
+    """
     t_vals: list[float] = []
     cx_vals: list[float] = []
     cy_vals: list[float] = []
@@ -254,8 +264,7 @@ def main() -> int:
         while True:
             ok, frame = cap.read()
             if not ok:
-                print("ERROR: Failed to read frame from camera.", file=sys.stderr)
-                return 1
+                raise CaptureError("Failed to read frame from camera.")
 
             if video_writer is None and not args.no_mp4:
                 frame_h, frame_w = frame.shape[:2]
@@ -266,11 +275,7 @@ def main() -> int:
                 video_path = out_dir / "raw_preview.mp4"
                 video_writer = cv2.VideoWriter(str(video_path), fourcc, float(fps), (frame_w, frame_h))
                 if not video_writer.isOpened():
-                    print(
-                        f"ERROR: Failed to initialize MP4 writer at {video_path}.",
-                        file=sys.stderr,
-                    )
-                    return 1
+                    raise CaptureError(f"Failed to initialize MP4 writer at {video_path}.")
 
             t_s = time.monotonic() - start_t
             overlay, mask, _contours, cx, cy = process_frame(
@@ -301,6 +306,8 @@ def main() -> int:
 
             if args.duration is not None and t_s >= args.duration:
                 break
+    except KeyboardInterrupt:
+        print("Interrupted: saving captured data", file=sys.stderr)
     finally:
         if video_writer is not None:
             video_writer.release()
@@ -308,28 +315,72 @@ def main() -> int:
         if not args.no_preview:
             cv2.destroyAllWindows()
 
-    if len(t_vals) == 0:
+    return CaptureResult(
+        t_s=np.array(t_vals, dtype=float),
+        cx=np.array(cx_vals, dtype=float),
+        cy=np.array(cy_vals, dtype=float),
+        debug_preview=first_debug_preview,
+        debug_mask=first_debug_mask,
+    )
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    args = parse_args(argv)
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        hsv_lower = parse_hsv_bound(args.hsv_lower)
+        hsv_upper = parse_hsv_bound(args.hsv_upper)
+        hsv_lower2 = parse_hsv_bound(args.hsv_lower2) if args.hsv_lower2 else None
+        hsv_upper2 = parse_hsv_bound(args.hsv_upper2) if args.hsv_upper2 else None
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    cap = open_camera(args.camera_index, args.device, args.width, args.height)
+    if not cap.isOpened():
+        source = args.device if args.device else f"index={args.camera_index}"
+        print(
+            f"ERROR: Could not open camera source ({source}). "
+            "On Linux, verify /dev/video* and user membership in the video group.",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        result = capture_run(
+            cap,
+            args,
+            out_dir,
+            hsv_lower=hsv_lower,
+            hsv_upper=hsv_upper,
+            hsv_lower2=hsv_lower2,
+            hsv_upper2=hsv_upper2,
+        )
+    except CaptureError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    if len(result.t_s) == 0:
         print("ERROR: No frames captured.", file=sys.stderr)
         return 1
 
-    if first_debug_preview is None or first_debug_mask is None:
+    if result.debug_preview is None or result.debug_mask is None:
         print("ERROR: Unable to capture debug frame.", file=sys.stderr)
         return 1
 
-    t_arr = np.array(t_vals, dtype=float)
-    cx_arr = np.array(cx_vals, dtype=float)
-    cy_arr = np.array(cy_vals, dtype=float)
-    cx_filled, cy_filled = interpolate_gaps(cx_arr, cy_arr, args.max_gap)
+    cx_filled, cy_filled = interpolate_gaps(result.cx, result.cy, args.max_gap)
     displacement = compute_displacement(cx_filled, cy_filled)
 
     save_outputs(
         out_dir=out_dir,
-        t_s=t_arr,
+        t_s=result.t_s,
         cx=cx_filled,
         cy=cy_filled,
         displacement=displacement,
-        debug_preview=first_debug_preview,
-        debug_mask=first_debug_mask,
+        debug_preview=result.debug_preview,
+        debug_mask=result.debug_mask,
         show_plot=args.show_plot,
     )
 

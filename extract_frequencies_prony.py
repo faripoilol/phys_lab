@@ -12,6 +12,16 @@ from typing import Sequence
 import numpy as np
 import pandas as pd
 
+DEFAULT_MAX_DECAY_RATE = 5.0
+DEFAULT_MAX_GROWTH_RATE = 0.75
+STATUS_ACCEPTED = "accepted"
+STATUS_OVERDAMPED = "rejected: overdamped"
+STATUS_UNSTABLE = "rejected: unstable"
+STATUS_NEAR_STRONGER = "rejected: near stronger mode"
+STATUS_BEYOND_TOP_K = "rejected: beyond top-k"
+
+ModeRow = dict[str, float | int | str]
+
 
 @dataclass
 class PreparedSignal:
@@ -60,6 +70,24 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=float,
         default=None,
         help="Maximum frequency in Hz to keep (default: Nyquist frequency)",
+    )
+    parser.add_argument(
+        "--max-decay-rate",
+        type=float,
+        default=DEFAULT_MAX_DECAY_RATE,
+        help=(
+            "Reject modes decaying faster than this rate in 1/s, i.e. with "
+            f"damping_per_s below -MAX_DECAY_RATE (default: {DEFAULT_MAX_DECAY_RATE})"
+        ),
+    )
+    parser.add_argument(
+        "--max-growth-rate",
+        type=float,
+        default=DEFAULT_MAX_GROWTH_RATE,
+        help=(
+            "Reject modes growing faster than this rate in 1/s, i.e. with "
+            f"damping_per_s above MAX_GROWTH_RATE (default: {DEFAULT_MAX_GROWTH_RATE})"
+        ),
     )
     parser.add_argument(
         "--no-detrend",
@@ -160,26 +188,66 @@ def fit_mode_amplitudes(signal: np.ndarray, roots: np.ndarray) -> np.ndarray:
     return amplitudes
 
 
+def mode_energy(amplitude: complex, root: complex, n_samples: int) -> float:
+    """Energy of one mode over the prepared window: |A|^2 * sum_{n=0}^{N-1} |z|^(2n).
+
+    Uses the closed form of the geometric sum, (1 - |z|^(2N)) / (1 - |z|^2), and
+    falls back to N when |z| is 1. Growing roots can overflow the sum to inf.
+    """
+    amplitude_sq = float(abs(amplitude)) ** 2
+    if amplitude_sq == 0.0:
+        return 0.0
+    magnitude_sq = np.float64(abs(root)) ** 2
+    if abs(1.0 - magnitude_sq) < 1e-12:
+        geometric_sum = float(n_samples)
+    else:
+        with np.errstate(over="ignore"):
+            geometric_sum = float((1.0 - magnitude_sq**n_samples) / (1.0 - magnitude_sq))
+    return float(amplitude_sq * geometric_sum)
+
+
 def select_dominant_modes(
-    rows: list[dict[str, float | int | str]],
+    rows: list[ModeRow],
     *,
     top_k: int,
-) -> list[dict[str, float | int | str]]:
-    selected: list[dict[str, float | int | str]] = []
-    for row in sorted(rows, key=lambda item: float(item["amplitude_px"]), reverse=True):
+    max_decay_rate: float = DEFAULT_MAX_DECAY_RATE,
+    max_growth_rate: float = DEFAULT_MAX_GROWTH_RATE,
+) -> list[ModeRow]:
+    """Assign a status and rank to every candidate row.
+
+    Candidates are visited in descending energy order. A candidate is rejected when it
+    decays faster than max_decay_rate, grows faster than max_growth_rate, sits too close
+    in frequency to an already accepted (stronger) mode, or when top_k modes are already
+    accepted. Accepted rows come first with mode_rank 1..top_k, rejected rows follow
+    with mode_rank 0.
+    """
+    accepted: list[ModeRow] = []
+    rejected: list[ModeRow] = []
+    for row in sorted(rows, key=lambda item: float(item["energy"]), reverse=True):
+        damping = float(row["damping_per_s"])
         frequency = float(row["frequency_hz"])
-        too_close = any(
+        if damping < -max_decay_rate:
+            status = STATUS_OVERDAMPED
+        elif damping > max_growth_rate:
+            status = STATUS_UNSTABLE
+        elif any(
             abs(frequency - float(chosen["frequency_hz"])) <= max(0.05, 0.02 * frequency)
-            for chosen in selected
-        )
-        if too_close:
-            continue
-        selected.append(row)
-        if len(selected) >= top_k:
-            break
-    for idx, row in enumerate(selected, start=1):
-        row["mode_rank"] = idx
-    return selected
+            for chosen in accepted
+        ):
+            status = STATUS_NEAR_STRONGER
+        elif len(accepted) >= top_k:
+            status = STATUS_BEYOND_TOP_K
+        else:
+            status = STATUS_ACCEPTED
+
+        row["status"] = status
+        if status == STATUS_ACCEPTED:
+            accepted.append(row)
+            row["mode_rank"] = len(accepted)
+        else:
+            rejected.append(row)
+            row["mode_rank"] = 0
+    return accepted + rejected
 
 
 def analyze_signal(
@@ -192,7 +260,10 @@ def analyze_signal(
     min_frequency: float,
     max_frequency: float | None,
     detrend: bool,
-) -> tuple[list[dict[str, float | int | str]], PreparedSignal]:
+    max_decay_rate: float = DEFAULT_MAX_DECAY_RATE,
+    max_growth_rate: float = DEFAULT_MAX_GROWTH_RATE,
+) -> tuple[list[ModeRow], PreparedSignal]:
+    """Return every in-band Prony candidate (accepted first, then rejected) and the prepared signal."""
     prepared = prepare_signal(t_s, values, signal_name=signal_name, detrend=detrend)
 
     if np.allclose(prepared.prepared, 0.0):
@@ -204,7 +275,7 @@ def analyze_signal(
     nyquist_hz = 0.5 / prepared.dt_s
     frequency_limit = nyquist_hz if max_frequency is None else min(max_frequency, nyquist_hz)
 
-    rows: list[dict[str, float | int | str]] = []
+    rows: list[ModeRow] = []
     for root, amplitude in zip(roots, amplitudes):
         if abs(root) == 0.0:
             continue
@@ -222,10 +293,12 @@ def analyze_signal(
             {
                 "signal": signal_name,
                 "mode_rank": 0,
+                "status": "",
                 "frequency_hz": frequency_hz,
                 "period_s": float(1.0 / frequency_hz),
                 "damping_per_s": float(exponent.real),
                 "amplitude_px": float(2.0 * abs(amplitude)),
+                "energy": mode_energy(amplitude, root, len(prepared.t_s)),
                 "phase_rad": float(np.angle(amplitude)),
                 "root_magnitude": float(abs(root)),
                 "sample_dt_s": float(prepared.dt_s),
@@ -233,7 +306,15 @@ def analyze_signal(
             }
         )
 
-    return select_dominant_modes(rows, top_k=top_k), prepared
+    return (
+        select_dominant_modes(
+            rows,
+            top_k=top_k,
+            max_decay_rate=max_decay_rate,
+            max_growth_rate=max_growth_rate,
+        ),
+        prepared,
+    )
 
 
 def save_prepared_signal(out_dir: Path, prepared: PreparedSignal) -> Path:
@@ -248,7 +329,7 @@ def save_prepared_signal(out_dir: Path, prepared: PreparedSignal) -> Path:
     return output_path
 
 
-def summarize_modes(rows: list[dict[str, float | int | str]]) -> list[str]:
+def summarize_modes(rows: list[ModeRow]) -> list[str]:
     lines: list[str] = []
     for row in rows:
         lines.append(
@@ -276,6 +357,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.min_frequency < 0.0:
         print("ERROR: --min-frequency must be non-negative.", file=sys.stderr)
         return 2
+    if args.max_decay_rate < 0.0:
+        print("ERROR: --max-decay-rate must be non-negative.", file=sys.stderr)
+        return 2
+    if args.max_growth_rate < 0.0:
+        print("ERROR: --max-growth-rate must be non-negative.", file=sys.stderr)
+        return 2
 
     input_path = Path(args.input)
     out_dir = Path(args.out)
@@ -295,8 +382,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 1
 
-    all_rows: list[dict[str, float | int | str]] = []
+    all_rows: list[ModeRow] = []
     prepared_paths: list[Path] = []
+    n_accepted_total = 0
 
     for signal_name in signal_names:
         try:
@@ -309,6 +397,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 min_frequency=args.min_frequency,
                 max_frequency=args.max_frequency,
                 detrend=not args.no_detrend,
+                max_decay_rate=args.max_decay_rate,
+                max_growth_rate=args.max_growth_rate,
             )
         except ValueError as exc:
             print(f"WARNING: Skipping {signal_name}: {exc}", file=sys.stderr)
@@ -322,9 +412,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             continue
 
         all_rows.extend(rows)
+        accepted = [row for row in rows if row["status"] == STATUS_ACCEPTED]
+        n_rejected = len(rows) - len(accepted)
+        n_accepted_total += len(accepted)
+
         print(f"Signal {signal_name}:")
-        for line in summarize_modes(rows):
+        if not accepted:
+            print("  no accepted modes")
+        for line in summarize_modes(accepted):
             print(line)
+        if n_rejected:
+            noun = "candidate" if n_rejected == 1 else "candidates"
+            print(f"  ({n_rejected} {noun} rejected)")
 
     frequencies_path = out_dir / "frequencies.csv"
     pd.DataFrame(
@@ -332,10 +431,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         columns=[
             "signal",
             "mode_rank",
+            "status",
             "frequency_hz",
             "period_s",
             "damping_per_s",
             "amplitude_px",
+            "energy",
             "phase_rad",
             "root_magnitude",
             "sample_dt_s",
@@ -347,7 +448,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for prepared_path in prepared_paths:
         print(f"Saved: {prepared_path}")
 
-    return 0 if all_rows else 1
+    return 0 if n_accepted_total else 1
 
 
 if __name__ == "__main__":
