@@ -30,8 +30,12 @@ done; this file replaces the earlier documentation expansion plan.
 
 ## Project hygiene
 
-- Resolve the deployment story: `CLOUDFLARE_PAGES.md` documents Cloudflare
-  Pages building `docs/`, while the open Cloudflare Workers pull request would
-  serve the repository root directly. Keep one.
+- Resolve the deployment story. `CLOUDFLARE_PAGES.md` documents Cloudflare
+  Pages building `docs/`, but the GitHub check runs show that Cloudflare
+  Workers Builds is what actually runs: it succeeds on `main` and fails on
+  every pull-request branch (including the previously merged PR #2), so the
+  dashboard build settings, not the repository, hold the real configuration.
+  Document those settings, fix or disable the branch preview builds, and close
+  or finish the open Workers configuration pull request.
 - Decide whether `notebooks/prony.ipynb` (untracked exploration of Prony's
   method) should be committed with outputs stripped or removed.
