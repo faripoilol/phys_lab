@@ -3,7 +3,7 @@
 These run in Chromium with a fake camera, so no hardware is needed. They are
 skipped when Playwright is not installed (it lives outside ~/envs/env312 on the
 development machine; run them with the interpreter that has Playwright, e.g.
-``python3 -m pytest tests/test_ui_live_lab.py``).
+``/usr/bin/python3 -m pytest tests/test_ui_live_lab.py``).
 """
 
 import http.server

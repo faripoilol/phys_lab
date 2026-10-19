@@ -60,6 +60,11 @@ The manual also documents three planned spring experiments:
 These planned experiments should be marked as documentation-only until matching
 app modes exist.
 
+The live app measures a limited frequency range per mode: rope-pendulum modes
+accept 0.3 to 2.5 Hz (lengths of roughly 0.04 m to 2.8 m), and the spring mode
+accepts 0.3 to 6 Hz. Motion outside the range gives no live reading, and the
+stopped-run review lists out-of-range Prony modes as rejected.
+
 ## Chapter 1: Rope Pendulum
 
 Rope-pendulum experiments use the small-angle pendulum model.
