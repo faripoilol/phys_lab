@@ -29,11 +29,14 @@ Normal release flow:
 ```bash
 source ~/envs/env312/bin/activate
 pytest -q
+node --test tests/estimator.test.js
 ./scripts/build-static-site.sh
-git add .
+git add -A
 git commit -m "Describe the source change"
 git push origin main
 ```
+
+GitHub Actions runs the same checks plus the headless UI test on every push.
 
 After the push, Cloudflare pulls `main`, runs the build command, and deploys the
 generated `docs/` output. Do not commit `docs/`.

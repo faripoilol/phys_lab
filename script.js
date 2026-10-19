@@ -26,6 +26,8 @@ const MODE_CONFIG = {
     signalAxisLabel: "Horizontal Axis",
     signalAxisPrefix: "x",
     signalName: "horizontal",
+    minFrequencyHz: 0.3,
+    maxFrequencyHz: 2.5,
     cameraTitle: "Red-marker tracking view",
     cameraDescription:
       "Enable the webcam, place the red pendulum marker in frame, and align the motion to move mostly left-to-right on screen. The overlay will mark the detected bob and the current horizontal analysis axis.",
@@ -57,6 +59,8 @@ const MODE_CONFIG = {
     signalAxisLabel: "Horizontal Axis",
     signalAxisPrefix: "x",
     signalName: "horizontal",
+    minFrequencyHz: 0.3,
+    maxFrequencyHz: 2.5,
     cameraTitle: "Red-marker tracking view",
     cameraDescription:
       "Enable the webcam, place the red pendulum marker in frame, and align the motion to move mostly left-to-right on screen. The overlay will mark the detected bob and the current horizontal analysis axis.",
@@ -89,6 +93,8 @@ const MODE_CONFIG = {
     signalAxisLabel: "Vertical Axis",
     signalAxisPrefix: "y",
     signalName: "vertical",
+    minFrequencyHz: 0.3,
+    maxFrequencyHz: 6,
     cameraTitle: "Vertical spring tracking view",
     cameraDescription:
       "Enable the webcam, place the red marker on the spring mass in frame, and align the motion to move mostly up-and-down on screen. The overlay will mark the detected mass and the current vertical analysis axis.",
@@ -106,21 +112,41 @@ const TRACKING_CONFIG = {
   minValue: 0.35,
   maxRedHue: 18,
   minWrapRedHue: 342,
-  minFrequencyHz: 0.33,
-  maxFrequencyHz: 2.5,
+  trackingGateFraction: 0.25,
+  trackingMinRelativeArea: 0.1,
   minCorrelationPeak: 0.35,
   minEstimateDurationS: 2.2,
-  estimatorWindowSamples: 420,
+  analysisRateHz: 30,
+  estimatorWindowS: 10,
+  finalWindowS: 30,
   traceWindowS: 12,
   liveEstimateIntervalMs: 140,
   pronyOrder: 6,
   pronyDisplayModes: 6,
   minPronyAmplitude: 0.05,
-  maxGrowingDampingPerS: 0.75,
-  minStableDampingPerS: -18,
-  maxStableRootMagnitude: 1.03,
-  minStableRootMagnitude: 0.55,
+  maxGrowthRatePerS: 0.75,
+  maxDecayRatePerS: 5,
 };
+
+const DEFAULT_FREQUENCY_RANGE = { minFrequencyHz: 0.3, maxFrequencyHz: 2.5 };
+
+function resolveFrequencyRange(range) {
+  return {
+    minFrequencyHz:
+      range && Number.isFinite(range.minFrequencyHz)
+        ? range.minFrequencyHz
+        : DEFAULT_FREQUENCY_RANGE.minFrequencyHz,
+    maxFrequencyHz:
+      range && Number.isFinite(range.maxFrequencyHz)
+        ? range.maxFrequencyHz
+        : DEFAULT_FREQUENCY_RANGE.maxFrequencyHz,
+  };
+}
+
+function formatFrequencyRange(range) {
+  const { minFrequencyHz, maxFrequencyHz } = resolveFrequencyRange(range);
+  return `${minFrequencyHz}–${maxFrequencyHz} Hz`;
+}
 
 function createDefaultModeState() {
   return {
@@ -166,7 +192,7 @@ function createRuntime() {
 
   return {
     stream: null,
-    frameRequestId: null,
+    frameRequest: null,
     processingCanvas,
     processingContext,
     currentDetection: createEmptyDetection(),
@@ -414,13 +440,17 @@ function linearDetrend(timesS, values) {
   return values.map((value, index) => value - (slope * timesS[index] + intercept));
 }
 
-function buildUniformSignal(samples) {
+function buildUniformSignal(samples, options = {}) {
+  const windowS = Number.isFinite(options.windowS) ? options.windowS : TRACKING_CONFIG.estimatorWindowS;
   const validSamples = samples.filter((sample) => Number.isFinite(sample.axis));
   if (validSamples.length < 8) {
     return null;
   }
 
-  const limitedSamples = validSamples.slice(-TRACKING_CONFIG.estimatorWindowSamples);
+  const lastElapsedMs = validSamples[validSamples.length - 1].elapsedMs;
+  const limitedSamples = validSamples.filter(
+    (sample) => sample.elapsedMs >= lastElapsedMs - windowS * 1000,
+  );
   const timesS = limitedSamples.map((sample) => sample.elapsedMs / 1000);
   const values = limitedSamples.map((sample) => sample.axis);
 
@@ -450,10 +480,14 @@ function buildUniformSignal(samples) {
     }
   }
 
-  const dtS = median(deltas);
-  if (!dtS || dtS <= 0) {
+  const medianDtS = median(deltas);
+  if (!medianDtS || medianDtS <= 0) {
     return null;
   }
+
+  // Resample at a fixed analysis rate so the estimator behaves the same on a
+  // 60 Hz and a 144 Hz display; faster sampling only duplicates camera frames.
+  const dtS = Math.max(medianDtS, 1 / TRACKING_CONFIG.analysisRateHz);
 
   const durationS = uniqueTimes[uniqueTimes.length - 1] - uniqueTimes[0];
   if (durationS < TRACKING_CONFIG.minEstimateDurationS) {
@@ -504,6 +538,7 @@ function buildUniformSignal(samples) {
   return {
     dtS,
     durationS,
+    windowS,
     timesS: uniformTimesS,
     values: detrended,
     axisSpan,
@@ -512,24 +547,21 @@ function buildUniformSignal(samples) {
   };
 }
 
-function estimateFrequencyFromSignal(signal) {
+function estimateFrequencyFromSignal(signal, range) {
   if (!signal || signal.values.length < 10) {
     return null;
   }
 
+  const { minFrequencyHz, maxFrequencyHz } = resolveFrequencyRange(range);
   const sampleCount = signal.values.length;
-  const minLag = Math.max(2, Math.floor(1 / (TRACKING_CONFIG.maxFrequencyHz * signal.dtS)));
-  const maxLag = Math.min(
-    sampleCount - 3,
-    Math.floor(1 / (TRACKING_CONFIG.minFrequencyHz * signal.dtS)),
-  );
-
-  if (maxLag <= minLag) {
+  const maxLag = Math.min(sampleCount - 3, Math.ceil(1 / (minFrequencyHz * signal.dtS)));
+  if (maxLag <= 3) {
     return null;
   }
 
-  const scores = [];
-  for (let lag = minLag; lag <= maxLag; lag += 1) {
+  // Normalised autocorrelation for every lag up to the slowest allowed period.
+  const scores = new Array(maxLag + 1).fill(null);
+  for (let lag = 1; lag <= maxLag; lag += 1) {
     let correlation = 0;
     let leftEnergy = 0;
     let rightEnergy = 0;
@@ -543,44 +575,62 @@ function estimateFrequencyFromSignal(signal) {
     }
 
     const denominator = Math.sqrt(leftEnergy * rightEnergy);
-    if (denominator <= 0) {
+    scores[lag] = denominator > 0 ? correlation / denominator : null;
+  }
+
+  // The autocorrelation starts near 1 and must fall through zero before the
+  // first genuine period peak. Taking the first peak after that crossing picks
+  // the fundamental rather than a multiple of the period.
+  let crossedZero = false;
+  let peakLag = null;
+  for (let lag = 2; lag < maxLag; lag += 1) {
+    const current = scores[lag];
+    if (current === null) {
+      continue;
+    }
+    if (!crossedZero) {
+      if (current < 0) {
+        crossedZero = true;
+      }
       continue;
     }
 
-    scores.push({
-      lag,
-      score: correlation / denominator,
-    });
-  }
-
-  if (scores.length === 0) {
-    return null;
-  }
-
-  let bestPeak = null;
-  for (let index = 0; index < scores.length; index += 1) {
-    const previous = index === 0 ? -Infinity : scores[index - 1].score;
-    const current = scores[index].score;
-    const next = index === scores.length - 1 ? -Infinity : scores[index + 1].score;
-
-    if (current >= previous && current > next) {
-      if (!bestPeak || current > bestPeak.score) {
-        bestPeak = scores[index];
-      }
+    const previous = scores[lag - 1];
+    const next = scores[lag + 1];
+    if (
+      previous !== null &&
+      next !== null &&
+      current >= previous &&
+      current > next &&
+      current >= TRACKING_CONFIG.minCorrelationPeak
+    ) {
+      peakLag = lag;
+      break;
     }
   }
 
-  if (!bestPeak) {
-    bestPeak = scores.reduce((best, entry) => (entry.score > best.score ? entry : best), scores[0]);
+  if (peakLag === null) {
+    return null;
   }
 
-  if (bestPeak.score < TRACKING_CONFIG.minCorrelationPeak) {
+  // Parabolic refinement of the peak for sub-sample period accuracy.
+  const left = scores[peakLag - 1];
+  const centre = scores[peakLag];
+  const right = scores[peakLag + 1];
+  const curvature = left - 2 * centre + right;
+  const offset = curvature < 0 ? (0.5 * (left - right)) / curvature : 0;
+  const refinedLag = peakLag + Math.max(-0.5, Math.min(0.5, offset));
+  const frequencyHz = 1 / (refinedLag * signal.dtS);
+
+  // A fundamental faster than the mode allows must not be reported as a
+  // confident reading at a multiple of its period.
+  if (frequencyHz > maxFrequencyHz * 1.02 || frequencyHz < minFrequencyHz / 1.02) {
     return null;
   }
 
   return {
-    frequencyHz: 1 / (bestPeak.lag * signal.dtS),
-    qualityScore: bestPeak.score,
+    frequencyHz,
+    qualityScore: centre,
   };
 }
 
@@ -839,7 +889,31 @@ function fitComplexModeAmplitudes(values, roots) {
   return solveComplexLinearSystem(gram, projected);
 }
 
-function analyzePronySignal(signal) {
+function classifyPronyMode(mode, range) {
+  const { minFrequencyHz, maxFrequencyHz } = resolveFrequencyRange(range);
+  if (mode.frequencyHz < minFrequencyHz || mode.frequencyHz > maxFrequencyHz) {
+    return `Rejected: outside ${formatFrequencyRange(range)}`;
+  }
+  if (mode.dampingPerS > TRACKING_CONFIG.maxGrowthRatePerS) {
+    return "Rejected: unstable";
+  }
+  if (mode.dampingPerS < -TRACKING_CONFIG.maxDecayRatePerS) {
+    return "Rejected: overdamped";
+  }
+  return null;
+}
+
+function modeEnergy(amplitude, root, sampleCount) {
+  const amplitudeSq = amplitude.re * amplitude.re + amplitude.im * amplitude.im;
+  const magnitudeSq = root.re * root.re + root.im * root.im;
+  const geometricSum =
+    Math.abs(1 - magnitudeSq) < 1e-12
+      ? sampleCount
+      : (1 - magnitudeSq ** sampleCount) / (1 - magnitudeSq);
+  return amplitudeSq * geometricSum;
+}
+
+function analyzePronySignal(signal, range) {
   if (!signal) {
     return {
       candidateModes: [],
@@ -894,7 +968,7 @@ function analyzePronySignal(signal) {
     };
   }
 
-  const frequencyLimit = Math.min(TRACKING_CONFIG.maxFrequencyHz, 0.5 / signal.dtS);
+  const nyquistHz = 0.5 / signal.dtS;
   const rawModes = [];
 
   for (let index = 0; index < roots.length; index += 1) {
@@ -915,7 +989,7 @@ function analyzePronySignal(signal) {
     }
 
     const frequencyHz = angularFrequency / (2 * Math.PI);
-    if (frequencyHz < TRACKING_CONFIG.minFrequencyHz || frequencyHz > frequencyLimit) {
+    if (frequencyHz > nyquistHz) {
       continue;
     }
 
@@ -929,6 +1003,7 @@ function analyzePronySignal(signal) {
       frequencyHz,
       periodS: 1 / frequencyHz,
       amplitudePx,
+      energy: modeEnergy(amplitude, root, signal.values.length),
       dampingPerS,
       phaseRad: Math.atan2(amplitude.im, amplitude.re),
       rootMagnitude: absComplex(root),
@@ -939,23 +1014,18 @@ function analyzePronySignal(signal) {
     });
   }
 
-  const sortedModes = [...rawModes].sort((left, right) => right.amplitudePx - left.amplitudePx);
+  // Rank by energy over the analysed window so a sustained oscillation beats
+  // a large but short-lived transient.
+  const sortedModes = [...rawModes].sort((left, right) => right.energy - left.energy);
   const acceptedModes = [];
   const displayModes = [];
 
   for (const mode of sortedModes) {
     const reviewedMode = { ...mode };
+    const rejection = classifyPronyMode(reviewedMode, range);
 
-    if (
-      reviewedMode.dampingPerS > TRACKING_CONFIG.maxGrowingDampingPerS ||
-      reviewedMode.rootMagnitude > TRACKING_CONFIG.maxStableRootMagnitude
-    ) {
-      reviewedMode.status = "Rejected: unstable";
-    } else if (
-      reviewedMode.dampingPerS < TRACKING_CONFIG.minStableDampingPerS ||
-      reviewedMode.rootMagnitude < TRACKING_CONFIG.minStableRootMagnitude
-    ) {
-      reviewedMode.status = "Rejected: overdamped";
+    if (rejection) {
+      reviewedMode.status = rejection;
     } else if (
       acceptedModes.some(
         (candidate) =>
@@ -983,7 +1053,9 @@ function analyzePronySignal(signal) {
     primaryMode: acceptedModes[0] || null,
     preparedSampleCount: signal.values.length,
     sampleDtS: signal.dtS,
-    error: acceptedModes[0] ? null : "No stable Prony mode survived filtering.",
+    error: acceptedModes[0]
+      ? null
+      : `No stable Prony mode inside ${formatFrequencyRange(range)} survived filtering.`,
   };
 }
 
@@ -1004,9 +1076,10 @@ function summarizeRun(samples, metadata) {
   const durationS = samples.length > 0 ? samples[samples.length - 1].elapsedMs / 1000 : 0;
   const validSamples = samples.filter((sample) => Number.isFinite(sample.axis));
   const detectionRate = samples.length > 0 ? validSamples.length / samples.length : 0;
-  const signal = buildUniformSignal(samples);
-  const provisionalEstimate = estimateFrequencyFromSignal(signal);
-  const prony = analyzePronySignal(signal);
+  const modeConfig = metadata ? MODE_CONFIG[metadata.mode] : null;
+  const signal = buildUniformSignal(samples, { windowS: TRACKING_CONFIG.finalWindowS });
+  const provisionalEstimate = estimateFrequencyFromSignal(signal, modeConfig);
+  const prony = analyzePronySignal(signal, modeConfig);
   const qualityLabel = describeQuality(
     detectionRate,
     provisionalEstimate ? provisionalEstimate.qualityScore : null,
@@ -1028,6 +1101,182 @@ function summarizeRun(samples, metadata) {
   };
 }
 
+function isRedPixel(red, green, blue) {
+  const hsv = rgbToHsv(red, green, blue);
+  return (
+    (hsv.hue <= TRACKING_CONFIG.maxRedHue || hsv.hue >= TRACKING_CONFIG.minWrapRedHue) &&
+    hsv.saturation >= TRACKING_CONFIG.minSaturation &&
+    hsv.value >= TRACKING_CONFIG.minValue
+  );
+}
+
+// Label 4-connected groups of red cells on the sampling grid. Each blob carries
+// its cell count, centroid and bounds in frame pixel coordinates.
+function findRedBlobs(mask, gridWidth, gridHeight, step) {
+  const visited = new Uint8Array(mask.length);
+  const blobs = [];
+  const stack = [];
+
+  const visit = (index) => {
+    if (mask[index] && !visited[index]) {
+      visited[index] = 1;
+      stack.push(index);
+    }
+  };
+
+  for (let start = 0; start < mask.length; start += 1) {
+    if (!mask[start] || visited[start]) {
+      continue;
+    }
+
+    visited[start] = 1;
+    stack.push(start);
+    const blob = {
+      count: 0,
+      sumX: 0,
+      sumY: 0,
+      minX: Infinity,
+      minY: Infinity,
+      maxX: -Infinity,
+      maxY: -Infinity,
+    };
+
+    while (stack.length > 0) {
+      const index = stack.pop();
+      const gridX = index % gridWidth;
+      const gridY = (index - gridX) / gridWidth;
+      const x = gridX * step;
+      const y = gridY * step;
+
+      blob.count += 1;
+      blob.sumX += x;
+      blob.sumY += y;
+      blob.minX = Math.min(blob.minX, x);
+      blob.minY = Math.min(blob.minY, y);
+      blob.maxX = Math.max(blob.maxX, x);
+      blob.maxY = Math.max(blob.maxY, y);
+
+      if (gridX > 0) {
+        visit(index - 1);
+      }
+      if (gridX < gridWidth - 1) {
+        visit(index + 1);
+      }
+      if (gridY > 0) {
+        visit(index - gridWidth);
+      }
+      if (gridY < gridHeight - 1) {
+        visit(index + gridWidth);
+      }
+    }
+
+    blob.centroidX = blob.sumX / blob.count;
+    blob.centroidY = blob.sumY / blob.count;
+    blobs.push(blob);
+  }
+
+  return blobs;
+}
+
+// Prefer the blob nearest the previous detection so a second red object does
+// not steal the marker mid-run; fall back to the largest blob otherwise.
+function chooseMarkerBlob(candidates, previousDetection, frameWidth) {
+  const largest = candidates.reduce(
+    (best, blob) => (blob.count > best.count ? blob : best),
+    candidates[0],
+  );
+
+  if (
+    !previousDetection ||
+    !previousDetection.detected ||
+    !Number.isFinite(previousDetection.centroidXPx) ||
+    !Number.isFinite(previousDetection.centroidYPx)
+  ) {
+    return largest;
+  }
+
+  const gateRadius = frameWidth * TRACKING_CONFIG.trackingGateFraction;
+  let nearest = null;
+  let nearestDistance = Infinity;
+  for (const blob of candidates) {
+    if (blob.count < largest.count * TRACKING_CONFIG.trackingMinRelativeArea) {
+      continue;
+    }
+    const distance = Math.hypot(
+      blob.centroidX - previousDetection.centroidXPx,
+      blob.centroidY - previousDetection.centroidYPx,
+    );
+    if (distance < nearestDistance) {
+      nearest = blob;
+      nearestDistance = distance;
+    }
+  }
+
+  return nearest && nearestDistance <= gateRadius ? nearest : largest;
+}
+
+function detectMarkerInImageData(data, frameWidth, frameHeight, previousDetection) {
+  const step = TRACKING_CONFIG.sampleStepPx;
+  const gridWidth = Math.ceil(frameWidth / step);
+  const gridHeight = Math.ceil(frameHeight / step);
+  const mask = new Uint8Array(gridWidth * gridHeight);
+  let redCells = 0;
+
+  for (let gridY = 0; gridY < gridHeight; gridY += 1) {
+    const y = gridY * step;
+    for (let gridX = 0; gridX < gridWidth; gridX += 1) {
+      const x = gridX * step;
+      const offset = (y * frameWidth + x) * 4;
+      if (isRedPixel(data[offset], data[offset + 1], data[offset + 2])) {
+        mask[gridY * gridWidth + gridX] = 1;
+        redCells += 1;
+      }
+    }
+  }
+
+  const totalCells = gridWidth * gridHeight;
+  const minCells = Math.max(
+    TRACKING_CONFIG.minMaskPixels,
+    Math.floor(totalCells * TRACKING_CONFIG.minMaskFraction),
+  );
+  const candidates =
+    redCells >= minCells
+      ? findRedBlobs(mask, gridWidth, gridHeight, step).filter((blob) => blob.count >= minCells)
+      : [];
+
+  if (candidates.length === 0) {
+    return {
+      detected: false,
+      horizontalAxisNormalized: null,
+      verticalAxisNormalized: null,
+      areaFraction: redCells / Math.max(1, totalCells),
+      centroidXPx: null,
+      centroidYPx: null,
+      frameWidth,
+      frameHeight,
+      bounds: null,
+    };
+  }
+
+  const chosen = chooseMarkerBlob(candidates, previousDetection, frameWidth);
+  return {
+    detected: true,
+    horizontalAxisNormalized: (chosen.centroidX / Math.max(1, frameWidth - 1)) * 2 - 1,
+    verticalAxisNormalized: 1 - (chosen.centroidY / Math.max(1, frameHeight - 1)) * 2,
+    areaFraction: chosen.count / Math.max(1, totalCells),
+    centroidXPx: chosen.centroidX,
+    centroidYPx: chosen.centroidY,
+    frameWidth,
+    frameHeight,
+    bounds: {
+      minX: chosen.minX,
+      minY: chosen.minY,
+      maxX: chosen.maxX,
+      maxY: chosen.maxY,
+    },
+  };
+}
+
 function analyzeMarkerFrame(video, runtime) {
   const { processingCanvas, processingContext } = runtime;
   if (!processingContext || video.videoWidth === 0 || video.videoHeight === 0) {
@@ -1044,81 +1293,7 @@ function analyzeMarkerFrame(video, runtime) {
 
   processingContext.drawImage(video, 0, 0, frameWidth, frameHeight);
   const image = processingContext.getImageData(0, 0, frameWidth, frameHeight);
-  const { data } = image;
-
-  let detectedPixels = 0;
-  let totalProcessedPixels = 0;
-  let sumX = 0;
-  let sumY = 0;
-  let minX = frameWidth;
-  let minY = frameHeight;
-  let maxX = 0;
-  let maxY = 0;
-
-  for (let y = 0; y < frameHeight; y += TRACKING_CONFIG.sampleStepPx) {
-    for (let x = 0; x < frameWidth; x += TRACKING_CONFIG.sampleStepPx) {
-      const offset = (y * frameWidth + x) * 4;
-      const red = data[offset];
-      const green = data[offset + 1];
-      const blue = data[offset + 2];
-      const hsv = rgbToHsv(red, green, blue);
-      totalProcessedPixels += 1;
-
-      const matchesRed =
-        (hsv.hue <= TRACKING_CONFIG.maxRedHue ||
-          hsv.hue >= TRACKING_CONFIG.minWrapRedHue) &&
-        hsv.saturation >= TRACKING_CONFIG.minSaturation &&
-        hsv.value >= TRACKING_CONFIG.minValue;
-
-      if (!matchesRed) {
-        continue;
-      }
-
-      detectedPixels += 1;
-      sumX += x;
-      sumY += y;
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
-    }
-  }
-
-  const minDetectedPixels = Math.max(
-    TRACKING_CONFIG.minMaskPixels,
-    Math.floor(totalProcessedPixels * TRACKING_CONFIG.minMaskFraction),
-  );
-
-  if (detectedPixels < minDetectedPixels) {
-    return {
-      detected: false,
-      horizontalAxisNormalized: null,
-      verticalAxisNormalized: null,
-      areaFraction: detectedPixels / Math.max(1, totalProcessedPixels),
-      centroidXPx: null,
-      centroidYPx: null,
-      frameWidth,
-      frameHeight,
-      bounds: null,
-    };
-  }
-
-  return {
-    detected: true,
-    horizontalAxisNormalized: (sumX / detectedPixels / Math.max(1, frameWidth - 1)) * 2 - 1,
-    verticalAxisNormalized: 1 - (sumY / detectedPixels / Math.max(1, frameHeight - 1)) * 2,
-    areaFraction: detectedPixels / Math.max(1, totalProcessedPixels),
-    centroidXPx: sumX / detectedPixels,
-    centroidYPx: sumY / detectedPixels,
-    frameWidth,
-    frameHeight,
-    bounds: {
-      minX,
-      minY,
-      maxX,
-      maxY,
-    },
-  };
+  return detectMarkerInImageData(image.data, frameWidth, frameHeight, runtime.currentDetection);
 }
 
 function snapshotRunMetadata(state) {
@@ -1159,8 +1334,9 @@ function appendRunSample(runtime, detection, nowMs) {
   }
 
   runtime.run.lastEstimateUpdateMs = nowMs;
+  const modeConfig = runtime.run.metadata ? MODE_CONFIG[runtime.run.metadata.mode] : null;
   const signal = buildUniformSignal(runtime.run.samples);
-  const estimate = estimateFrequencyFromSignal(signal);
+  const estimate = estimateFrequencyFromSignal(signal, modeConfig);
   runtime.run.liveEstimate = estimate
     ? {
         ...estimate,
@@ -1733,17 +1909,24 @@ function renderReview(elements, state, runtime) {
     review.detectionRate * 100,
   )}% visible`;
 
+  const analysedNote = review.signal
+    ? ` Analysed the last ${review.signal.durationS.toFixed(1)} s at ${Math.round(
+        1 / review.signal.dtS,
+      )} samples/s.`
+    : "";
+
   if (primaryMode) {
     elements.primaryModeTitle.textContent = `${formatFrequency(primaryMode.frequencyHz)} selected`;
     elements.primaryModeSummary.textContent =
       `Period ${formatPeriod(primaryMode.periodS)}, amplitude ${formatAmplitude(
         primaryMode.amplitudePx,
-      )}, damping ${formatDamping(primaryMode.dampingPerS)}.`;
+      )}, damping ${formatDamping(primaryMode.dampingPerS)}.${analysedNote}`;
   } else {
     elements.primaryModeTitle.textContent = "No stable final mode";
     elements.primaryModeSummary.textContent =
-      review.prony.error ||
-      "The stopped run did not produce a stable Prony candidate inside the allowed range.";
+      (review.prony.error ||
+        "The stopped run did not produce a stable Prony candidate inside the allowed range.") +
+      analysedNote;
   }
 
   if (review.pendingReview) {
@@ -1774,6 +1957,7 @@ function renderDiagnostics(elements, state, runtime) {
 
   elements.runStateValue.textContent = runState;
   elements.axisStatusLabel.textContent = modeConfig.signalAxisLabel;
+  elements.liveFrequencyLabel.textContent = `Live Frequency (${formatFrequencyRange(modeConfig)})`;
 
   if (!runtime.stream) {
     elements.markerStatusValue.textContent = "Waiting for preview";
@@ -1814,7 +1998,9 @@ function renderDiagnostics(elements, state, runtime) {
       "This stopped run has a final Prony estimate. Keep it to add the run into the current experiment session.";
   } else if (runtime.run.lastCompleted) {
     elements.traceCaption.textContent =
-      "This stopped run did not produce a stable Prony mode. Improve marker visibility or run duration and try again.";
+      `This stopped run did not produce a stable Prony mode inside ${formatFrequencyRange(
+        modeConfig,
+      )}. Improve marker visibility or run duration and try again.`;
   } else {
     elements.traceCaption.textContent =
       `Start a run to capture the ${modeConfig.signalName} marker signal. Final stopped-run frequency is now selected from browser-side Prony analysis.`;
@@ -1863,34 +2049,69 @@ function refreshUI(elements, state, runtime) {
   updateButtons(elements, runtime);
 }
 
+function getStreamFrameRate(stream, fallbackFps) {
+  try {
+    const [track] = stream ? stream.getVideoTracks() : [];
+    const settings = track && typeof track.getSettings === "function" ? track.getSettings() : null;
+    if (settings && Number.isFinite(settings.frameRate) && settings.frameRate > 0) {
+      return settings.frameRate;
+    }
+  } catch (_error) {
+    // Fall through to the default rate.
+  }
+  return fallbackFps;
+}
+
 function startTrackingLoop(elements, runtime, state) {
-  if (runtime.frameRequestId !== null) {
+  if (runtime.frameRequest !== null) {
     return;
   }
 
-  const step = () => {
+  const video = elements.cameraPreview;
+  // Sample once per camera frame. requestVideoFrameCallback fires exactly then;
+  // the requestAnimationFrame fallback is throttled to the track's frame rate so
+  // a 144 Hz display does not record the same camera frame five times over.
+  const useVideoFrames = typeof video.requestVideoFrameCallback === "function";
+  const fallbackIntervalMs = useVideoFrames ? 0 : 1000 / getStreamFrameRate(runtime.stream, 30);
+  let lastSampleMs = -Infinity;
+
+  const schedule = (callback) => {
+    if (useVideoFrames) {
+      const id = video.requestVideoFrameCallback(callback);
+      runtime.frameRequest = { cancel: () => video.cancelVideoFrameCallback(id) };
+    } else {
+      const id = window.requestAnimationFrame(callback);
+      runtime.frameRequest = { cancel: () => window.cancelAnimationFrame(id) };
+    }
+  };
+
+  const step = (now) => {
     if (!runtime.stream) {
-      runtime.frameRequestId = null;
+      runtime.frameRequest = null;
       return;
     }
 
-    const video = elements.cameraPreview;
-    if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+    const nowMs = typeof now === "number" ? now : performance.now();
+    const ready = video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0;
+    if (ready && nowMs - lastSampleMs >= fallbackIntervalMs - 1) {
+      lastSampleMs = nowMs;
       runtime.currentDetection = analyzeMarkerFrame(video, runtime);
-      appendRunSample(runtime, runtime.currentDetection, performance.now());
-      refreshUI(elements, state, runtime);
+      appendRunSample(runtime, runtime.currentDetection, nowMs);
+      // Only the live readouts change per frame; the session, review and mode
+      // panels re-render on user actions so their buttons stay clickable.
+      renderDiagnostics(elements, state, runtime);
     }
 
-    runtime.frameRequestId = window.requestAnimationFrame(step);
+    schedule(step);
   };
 
-  runtime.frameRequestId = window.requestAnimationFrame(step);
+  schedule(step);
 }
 
 function stopTrackingLoop(runtime) {
-  if (runtime.frameRequestId !== null) {
-    window.cancelAnimationFrame(runtime.frameRequestId);
-    runtime.frameRequestId = null;
+  if (runtime.frameRequest !== null) {
+    runtime.frameRequest.cancel();
+    runtime.frameRequest = null;
   }
 }
 
@@ -1977,6 +2198,7 @@ function init() {
     exportButton: document.getElementById("export-button"),
     lengthInput: document.getElementById("length-input"),
     lengthField: document.getElementById("length-field"),
+    liveFrequencyLabel: document.querySelector("[data-live-frequency-label]"),
     liveFrequencyValue: document.getElementById("live-frequency-value"),
     markerStatusValue: document.getElementById("marker-status-value"),
     massInput: document.getElementById("mass-input"),
@@ -2224,8 +2446,12 @@ function init() {
 
 if (typeof module !== "undefined") {
   module.exports = {
+    MODE_CONFIG,
+    TRACKING_CONFIG,
     analyzePronySignal,
     buildUniformSignal,
+    classifyPronyMode,
+    detectMarkerInImageData,
     estimateFrequencyFromSignal,
   };
 }
